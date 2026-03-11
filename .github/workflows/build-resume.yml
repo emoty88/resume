@@ -13,6 +13,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -50,7 +53,9 @@ jobs:
 
       - name: Install WeasyPrint
         run: |
-          pip3 install WeasyPrint==60.2
+          # Install WeasyPrint with compatible dependencies
+          pip3 install --upgrade pip
+          pip3 install WeasyPrint==61.2
           # Install additional fonts for better typography
           sudo apt-get install -y fonts-liberation fonts-dejavu-core
 
@@ -194,8 +199,17 @@ jobs:
 
       - name: Build PDF with WeasyPrint
         run: |
-          weasyprint resume.html resume.pdf
-          echo "✅ PDF generated successfully"
+          # Try WeasyPrint first
+          if weasyprint resume.html resume.pdf 2>/dev/null; then
+            echo "✅ PDF generated with WeasyPrint successfully"
+          else
+            echo "❌ WeasyPrint failed, trying alternative method..."
+            # Fallback to Chromium if WeasyPrint fails
+            sudo apt-get install -y chromium-browser
+            chromium-browser --headless --disable-gpu --no-sandbox --no-pdf-header-footer --print-to-pdf=resume.pdf "file://$(pwd)/resume.html"
+            echo "✅ PDF generated with Chromium fallback"
+          fi
+
           # Verify PDF was created and has reasonable size
           if [ -f "resume.pdf" ] && [ $(stat -f%z "resume.pdf" 2>/dev/null || stat -c%s "resume.pdf") -gt 1000 ]; then
             echo "✅ PDF validation passed"
