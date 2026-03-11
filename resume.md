@@ -2,18 +2,17 @@
 
 **Senior Software Engineer**
 
-San Francisco Bay Area, CA
-[turkmencaner@gmail.com](mailto:turkmencaner@gmail.com) | github.com/emoty88 | linkedin.com/in/canerturkmen
+📍 San Francisco Bay Area, CA
 
----
+✉️ [turkmencaner@gmail.com](mailto:turkmencaner@gmail.com) | 💻 [github.com/emoty88](https://github.com/emoty88) | 🔗 [linkedin.com/in/canerturkmen](https://linkedin.com/in/canerturkmen)
 
-## Professional Summary
+## 🧑‍💻 Professional Summary
 
 Senior Software Engineer with 10+ years of experience building scalable distributed systems and full-stack applications. Experienced across multiple ecosystems including Python, Django, and Java Spring Boot with a focus on microservices, event-driven architecture, and cloud-native systems. Proven ability to design and deliver production platforms supporting thousands of organizations and millions of users. Founder-engineer experienced in building AI-driven platforms using LangChain and LangGraph for intelligent automation and workflow orchestration.
 
 ---
 
-## Technical Skills
+## 🛠 Technical Skills
 
 **Languages**
 Python, Java, JavaScript, TypeScript
@@ -41,7 +40,7 @@ Unit Testing, Integration Testing, Selenium, Puppeteer
 
 ---
 
-## Professional Experience
+## 💼 Professional Experience
 
 ### Senior Software Engineer
 
@@ -88,7 +87,7 @@ Jul 2014 – Jan 2023
 
 ---
 
-## Selected Projects
+## 🚀 Projects
 
 ### Reqora — AI-Driven Returns Management Platform
 
@@ -113,7 +112,7 @@ Founder & CTO
 
 ---
 
-## Education
+## 🎓 Education
 
 **AI & Machine Learning Certification**
 California Institute of Technology
