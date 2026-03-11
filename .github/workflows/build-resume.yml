@@ -19,12 +19,40 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
 
-      - name: Install Pandoc
+      - name: Cache dependencies
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          path: |
+            ~/.cache/apt
+            ~/.cache/pip
+          key: ${{ runner.os }}-deps-${{ hashFiles('.github/workflows/build-resume.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-
+
+      - name: Validate resume file
+        run: |
+          if [ ! -f "resume.md" ]; then
+            echo "❌ resume.md not found"
+            exit 1
+          fi
+          if [ ! -s "resume.md" ]; then
+            echo "❌ resume.md is empty"
+            exit 1
+          fi
+          echo "✅ resume.md validated successfully"
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc
+          sudo apt-get install -y pandoc python3-pip
+
+      - name: Install WeasyPrint
+        run: |
+          pip3 install WeasyPrint==60.2
+          # Install additional fonts for better typography
+          sudo apt-get install -y fonts-liberation fonts-dejavu-core
 
       - name: Create HTML template
         run: |
@@ -38,52 +66,112 @@ jobs:
             <style>
               body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                line-height: 1.5;
-                max-width: 900px;
-                margin: 40px auto;
-                padding: 0 24px;
+                line-height: 1.28;
+                max-width: 860px;
+                margin: 24px auto;
+                padding: 0 18px;
                 color: #111;
+                font-size: 14px;
               }
+
               h1, h2, h3 {
-                margin-bottom: 0.3em;
+                margin-bottom: 0.2em;
               }
+
               h1 {
-                font-size: 2rem;
+                font-size: 1.8rem;
                 border-bottom: 2px solid #ddd;
-                padding-bottom: 0.2em;
+                padding-bottom: 0.15em;
+                margin-top: 0;
               }
+
               h2 {
-                font-size: 1.2rem;
-                margin-top: 1.5em;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 0.2em;
-              }
-              h3 {
-                font-size: 1rem;
+                font-size: 1.05rem;
                 margin-top: 1em;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 0.15em;
               }
-              p, li {
+
+              h3 {
                 font-size: 0.95rem;
+                margin-top: 0.7em;
+                margin-bottom: 0.15em;
               }
+
+              p, li {
+                font-size: 0.92rem;
+              }
+
+              p {
+                margin-top: 0.2em;
+                margin-bottom: 0.35em;
+              }
+
               ul {
-                padding-left: 1.2rem;
+                padding-left: 1rem;
+                margin-top: 0.2em;
+                margin-bottom: 0.45em;
               }
+
+              li {
+                margin-bottom: 0.15em;
+              }
+
               hr {
                 border: 0;
                 border-top: 1px solid #eee;
-                margin: 1.5em 0;
+                margin: 0.8em 0;
               }
+
               a {
                 color: #0a66c2;
                 text-decoration: none;
               }
+
               a:hover {
                 text-decoration: underline;
               }
+
+              strong {
+                font-weight: 600;
+              }
+
+              @page {
+                size: Letter;
+                margin: 0.75in 0.75in;
+              }
+
               @media print {
                 body {
                   margin: 0;
+                  padding: 0;
                   max-width: 100%;
+                  line-height: 1.22;
+                  font-size: 13px;
+                }
+
+                h1 {
+                  margin-top: 0;
+                }
+
+                h2, h3 {
+                  break-after: avoid;
+                  page-break-after: avoid;
+                }
+
+                ul, p {
+                  break-inside: avoid;
+                  page-break-inside: avoid;
+                }
+
+                .no-print {
+                  display: none !important;
+                }
+
+                a[href^="http"]:after {
+                  content: " (" attr(href) ")";
+                  font-size: 0.8em;
+                  color: #666;
                 }
               }
             </style>
@@ -102,29 +190,42 @@ jobs:
             --standalone \
             --template=template.html \
             -o resume.html
+          echo "✅ HTML generated successfully"
 
-      - name: Install Chromium
+      - name: Build PDF with WeasyPrint
         run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+          weasyprint resume.html resume.pdf
+          echo "✅ PDF generated successfully"
+          # Verify PDF was created and has reasonable size
+          if [ -f "resume.pdf" ] && [ $(stat -f%z "resume.pdf" 2>/dev/null || stat -c%s "resume.pdf") -gt 1000 ]; then
+            echo "✅ PDF validation passed"
+          else
+            echo "❌ PDF validation failed"
+            exit 1
+          fi
 
-      - name: Build PDF from HTML
+      - name: Add build metadata
         run: |
-          CHROME_BIN=$(command -v chromium-browser || command -v chromium)
-          "$CHROME_BIN" \
-            --headless \
-            --disable-gpu \
-            --no-sandbox \
-            --print-to-pdf=resume.pdf \
-            file://$GITHUB_WORKSPACE/resume.html
+          # Add build info to HTML
+          sed -i 's|</body>|<!-- Generated on '$(date -u)' by GitHub Actions -->\n</body>|' resume.html
+
+          # Create build info file
+          echo "Build Date: $(date -u)" > build-info.txt
+          echo "Commit: $GITHUB_SHA" >> build-info.txt
+          echo "Workflow: $GITHUB_WORKFLOW" >> build-info.txt
+          echo "Run ID: $GITHUB_RUN_ID" >> build-info.txt
+
+          echo "✅ Build metadata added"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
           name: resume-build
           path: |
             resume.html
             resume.pdf
+            build-info.txt
+          retention-days: 90
 
       - name: Prepare Pages artifact
         run: |
@@ -133,7 +234,7 @@ jobs:
           touch site/.nojekyll
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: ./site
 
@@ -148,4 +249,10 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+
+      - name: Deployment notification
+        if: success()
+        run: |
+          echo "🚀 Resume successfully deployed to: ${{ steps.deployment.outputs.page_url }}"
+          echo "📄 Direct PDF link: ${{ steps.deployment.outputs.page_url }}resume.pdf" || true
