@@ -13,9 +13,6 @@ permissions:
   pages: write
   id-token: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,40 +21,20 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/apt
-            ~/.cache/pip
-          key: ${{ runner.os }}-deps-${{ hashFiles('.github/workflows/build-resume.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-deps-
-
       - name: Validate resume file
         run: |
-          if [ ! -f "resume.md" ]; then
-            echo "❌ resume.md not found"
-            exit 1
-          fi
-          if [ ! -s "resume.md" ]; then
-            echo "❌ resume.md is empty"
-            exit 1
-          fi
-          echo "✅ resume.md validated successfully"
+          test -f resume.md || (echo "❌ resume.md not found" && exit 1)
+          test -s resume.md || (echo "❌ resume.md is empty" && exit 1)
+          echo "✅ resume.md validated"
 
-      - name: Install system dependencies
+      - name: Install Pandoc
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc python3-pip
+          sudo apt-get install -y pandoc
 
-      - name: Install WeasyPrint
-        run: |
-          # Install WeasyPrint with compatible dependencies
-          pip3 install --upgrade pip
-          pip3 install WeasyPrint==61.2
-          # Install additional fonts for better typography
-          sudo apt-get install -y fonts-liberation fonts-dejavu-core
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
 
       - name: Create HTML template
         run: |
@@ -71,61 +48,61 @@ jobs:
             <style>
               body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                line-height: 1.28;
+                line-height: 1.22;
                 max-width: 860px;
-                margin: 24px auto;
+                margin: 20px auto;
                 padding: 0 18px;
                 color: #111;
-                font-size: 14px;
+                font-size: 13px;
               }
 
               h1, h2, h3 {
-                margin-bottom: 0.2em;
+                margin-bottom: 0.15em;
               }
 
               h1 {
-                font-size: 1.8rem;
+                font-size: 1.7rem;
                 border-bottom: 2px solid #ddd;
-                padding-bottom: 0.15em;
+                padding-bottom: 0.12em;
                 margin-top: 0;
               }
 
               h2 {
-                font-size: 1.05rem;
-                margin-top: 1em;
+                font-size: 1rem;
+                margin-top: 0.9em;
                 border-bottom: 1px solid #eee;
-                padding-bottom: 0.15em;
+                padding-bottom: 0.12em;
               }
 
               h3 {
-                font-size: 0.95rem;
-                margin-top: 0.7em;
-                margin-bottom: 0.15em;
+                font-size: 0.93rem;
+                margin-top: 0.55em;
+                margin-bottom: 0.1em;
               }
 
               p, li {
-                font-size: 0.92rem;
+                font-size: 0.9rem;
               }
 
               p {
-                margin-top: 0.2em;
-                margin-bottom: 0.35em;
+                margin-top: 0.15em;
+                margin-bottom: 0.25em;
               }
 
               ul {
                 padding-left: 1rem;
-                margin-top: 0.2em;
-                margin-bottom: 0.45em;
+                margin-top: 0.15em;
+                margin-bottom: 0.35em;
               }
 
               li {
-                margin-bottom: 0.15em;
+                margin-bottom: 0.12em;
               }
 
               hr {
                 border: 0;
                 border-top: 1px solid #eee;
-                margin: 0.8em 0;
+                margin: 0.7em 0;
               }
 
               a {
@@ -143,7 +120,7 @@ jobs:
 
               @page {
                 size: Letter;
-                margin: 0.75in 0.75in;
+                margin: 0.55in 0.6in;
               }
 
               @media print {
@@ -151,32 +128,22 @@ jobs:
                   margin: 0;
                   padding: 0;
                   max-width: 100%;
-                  line-height: 1.22;
-                  font-size: 13px;
+                  font-size: 12.5px;
+                  line-height: 1.16;
                 }
 
-                h1 {
-                  margin-top: 0;
-                }
-
-                h2, h3 {
-                  break-after: avoid;
+                h1, h2, h3 {
                   page-break-after: avoid;
+                  break-after: avoid;
                 }
 
                 ul, p {
-                  break-inside: avoid;
-                  page-break-inside: avoid;
-                }
-
-                .no-print {
-                  display: none !important;
+                  page-break-inside: auto;
+                  break-inside: auto;
                 }
 
                 a[href^="http"]:after {
-                  content: " (" attr(href) ")";
-                  font-size: 0.8em;
-                  color: #666;
+                  content: "";
                 }
               }
             </style>
@@ -195,41 +162,31 @@ jobs:
             --standalone \
             --template=template.html \
             -o resume.html
-          echo "✅ HTML generated successfully"
+          echo "✅ HTML generated"
 
-      - name: Build PDF with WeasyPrint
+      - name: Build PDF with Chrome
         run: |
-          # Try WeasyPrint first
-          if weasyprint resume.html resume.pdf 2>/dev/null; then
-            echo "✅ PDF generated with WeasyPrint successfully"
-          else
-            echo "❌ WeasyPrint failed, trying alternative method..."
-            # Fallback to Chromium if WeasyPrint fails
-            sudo apt-get install -y chromium-browser
-            chromium-browser --headless --disable-gpu --no-sandbox --no-pdf-header-footer --print-to-pdf=resume.pdf "file://$(pwd)/resume.html"
-            echo "✅ PDF generated with Chromium fallback"
-          fi
+          "${{ steps.setup-chrome.outputs.chrome-path }}" \
+            --headless \
+            --disable-gpu \
+            --no-sandbox \
+            --print-to-pdf=resume.pdf \
+            "file://$GITHUB_WORKSPACE/resume.html"
 
-          # Verify PDF was created and has reasonable size
-          if [ -f "resume.pdf" ] && [ $(stat -f%z "resume.pdf" 2>/dev/null || stat -c%s "resume.pdf") -gt 1000 ]; then
-            echo "✅ PDF validation passed"
-          else
-            echo "❌ PDF validation failed"
-            exit 1
-          fi
+          test -f resume.pdf || (echo "❌ resume.pdf not created" && exit 1)
+          test -s resume.pdf || (echo "❌ resume.pdf is empty" && exit 1)
+          echo "✅ PDF generated"
 
       - name: Add build metadata
         run: |
-          # Add build info to HTML
-          sed -i 's|</body>|<!-- Generated on '$(date -u)' by GitHub Actions -->\n</body>|' resume.html
+          sed -i 's|</body>|<!-- Generated on '"$(date -u)"' by GitHub Actions -->\n</body>|' resume.html
 
-          # Create build info file
-          echo "Build Date: $(date -u)" > build-info.txt
-          echo "Commit: $GITHUB_SHA" >> build-info.txt
-          echo "Workflow: $GITHUB_WORKFLOW" >> build-info.txt
-          echo "Run ID: $GITHUB_RUN_ID" >> build-info.txt
-
-          echo "✅ Build metadata added"
+          {
+            echo "Build Date: $(date -u)"
+            echo "Commit: $GITHUB_SHA"
+            echo "Workflow: $GITHUB_WORKFLOW"
+            echo "Run ID: $GITHUB_RUN_ID"
+          } > build-info.txt
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -245,6 +202,7 @@ jobs:
         run: |
           mkdir -p site
           cp resume.html site/index.html
+          cp resume.pdf site/resume.pdf
           touch site/.nojekyll
 
       - name: Upload Pages artifact
@@ -264,9 +222,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Deployment notification
-        if: success()
-        run: |
-          echo "🚀 Resume successfully deployed to: ${{ steps.deployment.outputs.page_url }}"
-          echo "📄 Direct PDF link: ${{ steps.deployment.outputs.page_url }}resume.pdf" || true
